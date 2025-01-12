@@ -1,0 +1,75 @@
+---
+# tasks/main.yml
+
+- name: Ensure Node Exporter user exists
+  ansible.builtin.user:
+    name: role
+    shell: /bin/false
+    system: yes
+    state: present
+
+- name: Download Node Exporter
+  ansible.builtin.get_url:
+    url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    dest: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+
+- name: Extract Node Exporter
+  ansible.builtin.unarchive:
+    src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    dest: "/tmp/"
+    remote_src: yes
+
+- name: Move Node Exporter binary to /usr/local/bin
+  ansible.builtin.copy:
+    src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
+    remote_src: yes
+    dest: "/usr/local/bin/node_exporter"
+    mode: '0755'
+
+- name: Clean up temporary files
+  ansible.builtin.file:
+    path: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    state: absent
+
+- name: Create systemd service for Node Exporter
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/node_exporter.service
+    content: |
+      [Unit]
+      Description=Node Exporter
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      User=node_exporter
+      Group=node_exporter
+      Type=simple
+      ExecStart=/usr/local/bin/node_exporter
+
+      [Install]
+      WantedBy=default.target
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: Start and enable Node Exporter service
+  ansible.builtin.systemd:
+    name: node_exporter
+    state: started
+    enabled: yes
+
+- name: Ensure port 9100 is open in the firewall
+  ansible.builtin.firewalld:
+    port: 9100/tcp
+    permanent: yes
+    state: enabled
+
+- name: Reload firewall to apply changes
+  ansible.builtin.service:
+    name: firewalld
+    state: reloaded
+

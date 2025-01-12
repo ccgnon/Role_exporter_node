@@ -1,0 +1,3 @@
+# defaults/main.yml
+node_exporter_version: 1.6.1
+
